@@ -1,0 +1,32 @@
+# Environment variables (Do NOT push API keys)
+.env
+
+# Streamlit secrets file (if used)
+.streamlit/secrets.toml
+
+# Python cache & compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment (if created locally)
+venv/
+.env/
+*.venv
+
+# Jupyter Notebook checkpoints (if using Jupyter)
+.ipynb_checkpoints/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs & temp files
+*.log
+*.tmp
+*.bak
+
+# Ignore VS Code settings (if using VS Code)
+.vscode/
+.streamlit/
