@@ -63,8 +63,8 @@ def send_otp_email(email: str, otp: str):
         msg = MIMEMultipart()
         msg["From"] = smtp_email
         msg["To"] = email
-        msg["Subject"] = "Your OTP Code"
-        body = f"Your OTP is: {otp}. Valid for 5 minutes."
+        msg["Subject"] = "Your OTP Code for Historical Agent Bot"
+        body = f"Your  requested OTP is: {otp}. It is valid for 5 minutes."
         msg.attach(MIMEText(body, "plain"))
 
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
@@ -73,6 +73,7 @@ def send_otp_email(email: str, otp: str):
             server.sendmail(smtp_email, email, msg.as_string())
     except Exception as e:
         st.error(f"[ERROR] Email send failed: {e}")
+        
 
 # ------------------------------
 # Conversation Functions
