@@ -32,8 +32,6 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 # Connect to Redis
 redis_client = redis.from_url(redis_url, decode_responses=True)
 
-# Exit phrases used to detect if the user wants to exit the conversation.
-
 
 
 def is_valid_email(email):
@@ -73,9 +71,30 @@ def send_otp_email(email: str, otp: str):
             server.sendmail(smtp_email, email, msg.as_string())
     except Exception as e:
         st.error(f"[ERROR] Email send failed: {e}")
-        
+def send_summary_email(email: str, summary: str):
+    """Send the historical conversation summary via email with detailed logging."""
+    print("Starting send_summary_email function...")
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = smtp_email
+        msg["To"] = email
+        msg["Subject"] = "Your Historical Chat Summary"
+        body = f"Here is the summary of your conversation:\n\n{summary}"
+        msg.attach(MIMEText(body, "plain"))
+        print("Email message created successfully.")
 
-# ------------------------------
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            print("Connected to SMTP server. Starting TLS...")
+            server.starttls()
+            print("TLS started. Logging in...")
+            server.login(smtp_email, smtp_password)
+            print("Logged in successfully. Sending email...")
+            server.sendmail(smtp_email, email, msg.as_string())
+            print("Email sent successfully!")
+    except Exception as e:
+        print("Error in send_summary_email:", e)
+        raise Exception(f"Failed to send summary email: {e}")
+
 # Conversation Functions
 def detect_exit(state: AgentState) -> AgentState:
     """Use AI to intelligently detect if the user intends to exit the conversation."""
@@ -83,6 +102,10 @@ def detect_exit(state: AgentState) -> AgentState:
         return state
 
     user_message = state.messages[-1].content.lower()
+    
+    # Explicitly mark certain keywords as exit commands
+    if user_message in ["exit", "summary", "end"]:
+        return state.model_copy(update={"user_exiting": True})
 
     # Define a system prompt to classify the user's intent
     system_prompt = (
@@ -166,25 +189,44 @@ def verify_otp(state: AgentState) -> AgentState:
         "otp_attempts": new_attempts,
         "messages": state.messages + [AIMessage(content=f"Invalid OTP. {3 - new_attempts} attempts left. Please try again.")]
     })
-
+    
 def handle_exit(state: AgentState) -> AgentState:
     """
     Handle the exit scenario.
-    If the user types 'summary', provide a historical summary.
+    If the user types 'summary', generate a proper summary and send it via email.
     If 'end' is typed, exit the chat.
     Otherwise, prompt the user for a decision.
     """
     user_message = state.messages[-1].content.lower().strip() if state.messages else ""
+    print(f"[DEBUG] In handle_exit, user_message: '{user_message}'")
+    
     if user_message == "summary":
-        summary = "Historical Summary:\n" + "\n".join(
-            [f"{'User' if isinstance(msg, HumanMessage) else 'Bot'}: {msg.content}" for msg in state.messages]
-        )
-        return state.model_copy(update={"messages": state.messages + [AIMessage(content=summary)]})
+        # Generate a concise AI-powered summary instead of listing messages
+        conversation_text = "\n".join([msg.content for msg in state.messages if isinstance(msg, HumanMessage) or isinstance(msg, AIMessage)])
+        
+        system_prompt = "Summarize the following historical discussion into a concise and informative paragraph:"
+        summary_prompt = f"{system_prompt}\n\n{conversation_text}\n\nSummary:"
+        
+        # Use your AI model to generate a summary
+        summary = model.generate_content(summary_prompt).text.strip()
+        
+        print(f"[DEBUG] AI-generated Summary: {summary[:100]}...")  # print first 100 chars for brevity
+
+        if state.email:
+            try:
+                send_summary_email(state.email, summary)
+                return state.model_copy(update={"messages": state.messages + [AIMessage(content="A concise summary has been sent to your email. Let me know if you need anything else!")]} )
+            except Exception as e:
+                print(f"[DEBUG] Exception when sending summary email: {e}")
+                return state.model_copy(update={"messages": state.messages + [AIMessage(content=f"Failed to send summary. Error: {e}")]} )
+        else:
+            return state.model_copy(update={"messages": state.messages + [AIMessage(content="You haven't provided an email. Please enter your email to receive the summary.")]} )
+    
     elif user_message == "end":
-        return state.model_copy(update={"messages": state.messages + [AIMessage(content="Okay, ending the chat. Goodbye!")]})
+        return state.model_copy(update={"messages": state.messages + [AIMessage(content="Okay, ending the chat. Goodbye!")]} )
+    
     else:
-        # Prompt the user for a clear decision.
-        return state.model_copy(update={"messages": state.messages + [AIMessage(content="It seems you want to exit. Would you like a historical summary of our conversation or simply end the chat? Please type 'summary' for a summary or 'end' to exit. Also, if you haven’t shared your email yet, please provide it now for future updates on historical monuments.")]})
+        return state.model_copy(update={"messages": state.messages + [AIMessage(content="It seems you want to exit. Would you like a historical summary of our conversation or simply end the chat? Please type 'summary' for a summary or 'end' to exit. Also, if you haven’t shared your email yet, please provide it now for future updates on historical monuments.")]} )
 
 # ------------------------------
 # StateGraph Definition
@@ -231,9 +273,7 @@ def create_graph() -> StateGraph:
 
     return graph
 
-# ------------------------------
-# Streamlit App: Conversation Loop
-# ------------------------------
+
 
 
 def main():
