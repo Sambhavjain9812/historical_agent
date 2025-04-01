@@ -59,9 +59,28 @@ def send_otp_email(email: str, otp: str):
             server.sendmail(smtp_email, email, msg.as_string())
     except Exception as e:
         st.error(f"[ERROR] Email send failed: {e}")
+def send_summary_email(email: str, summary: str):
+    print("Starting send_summary_email function...")
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = smtp_email
+        msg["To"] = email
+        msg["Subject"] = "Your Historical Chat Summary"
+        body = f"Here is the summary of your conversation:\n\n{summary}"
+        msg.attach(MIMEText(body, "plain"))
+        print("Email message created successfully.")
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            print("Connected to SMTP server. Starting TLS...")
+            server.starttls()
+            print("TLS started. Logging in...")
+            server.login(smtp_email, smtp_password)
+            print("Logged in successfully. Sending email...")
+            server.sendmail(smtp_email, email, msg.as_string())
+            print("Email sent successfully!")
+    except Exception as e:
+        print("Error in send_summary_email:", e)
+        raise Exception(f"Failed to send summary email: {e}")
 
-# ------------------------------
-# Conversation Functions
 def detect_exit(state: AgentState) -> AgentState:
     if not state.messages:
         return state
